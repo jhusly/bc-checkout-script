@@ -1,5 +1,4 @@
 window.addEventListener("load", function () {
-  // Wait for Checkout to initialize
   const interval = setInterval(() => {
     if (window.checkoutConfig && window.Checkout && window.Checkout.$container) {
       clearInterval(interval);
@@ -10,7 +9,6 @@ window.addEventListener("load", function () {
   function initPickupHandler() {
     console.log("In-store pickup script initialized");
 
-    // Store address (overwrite to this when needed)
     const storeAddress = {
       firstName: 'Pickup',
       lastName: 'Customer',
@@ -24,37 +22,34 @@ window.addEventListener("load", function () {
       customFields: [],
     };
 
-    // Listen for shipping method updates
     const checkoutEl = document.querySelector("#checkout-app");
-
     const observer = new MutationObserver(() => {
       checkPickupAndReplaceAddress();
     });
-
     observer.observe(checkoutEl, { childList: true, subtree: true });
 
     async function checkPickupAndReplaceAddress() {
       try {
         const state = window.Checkout.getState();
-        const shippingOption = state.shippingOptions?.[0];
         const consignments = state.consignments || [];
-
         if (!consignments.length) return;
 
         const consignment = consignments[0];
         const selectedMethod = consignment.selectedShippingOption;
-
         if (!selectedMethod) return;
 
         const methodId = selectedMethod.id.toLowerCase();
+        const shippingAddress = consignment.shippingAddress;
 
-        // Trigger logic ONLY if selected method is in-store pickup
-        if (methodId.includes("pickup") && consignment.shippingAddress?.stateOrProvinceCode === "NC") {
-          console.log("In-store pickup selected for NC. Overriding shipping address...");
+        if (methodId.includes("pickup") && shippingAddress?.stateOrProvinceCode === "NC") {
+          console.log("In-store pickup selected for NC. Overriding shipping address…");
 
-          const checkoutService = window.Checkout;
+          const service = window.Checkout;
 
-          await checkoutService.updateShippingAddress(storeAddress);
+          await service.executeCheckoutAction((checkoutService) => {
+            return checkoutService.updateShippingAddress(storeAddress);
+          });
+
           console.log("Shipping address overwritten with store address");
         }
       } catch (err) {
