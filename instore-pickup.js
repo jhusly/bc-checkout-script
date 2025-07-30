@@ -1,60 +1,65 @@
-window.addEventListener("load", function () {
-  const interval = setInterval(() => {
-    if (window.checkoutConfig && window.Checkout && window.Checkout.$container) {
-      clearInterval(interval);
-      initPickupHandler();
-    }
-  }, 500);
+(function () {
+  const STORE_ADDRESS = {
+    firstName: 'In-Store',
+    lastName: 'Pickup',
+    address1: '123 Main Street',
+    city: 'Durham',
+    stateOrProvince: 'NC',
+    postalCode: '27701',
+    countryCode: 'US',
+  };
 
-  function initPickupHandler() {
-    console.log("In-store pickup script initialized");
-
-    const storeAddress = {
-      firstName: 'Pickup',
-      lastName: 'Customer',
-      address1: '123 Store St.',
-      address2: '',
-      city: 'Durham',
-      stateOrProvinceCode: 'NC',
-      postalCode: '27701',
-      countryCode: 'US',
-      phone: '919-000-0000',
-      customFields: [],
-    };
-
-    const checkoutEl = document.querySelector("#checkout-app");
-    const observer = new MutationObserver(() => {
-      checkPickupAndReplaceAddress();
-    });
-    observer.observe(checkoutEl, { childList: true, subtree: true });
-
-    async function checkPickupAndReplaceAddress() {
-      try {
-        const state = window.Checkout.getState();
-        const consignments = state.consignments || [];
-        if (!consignments.length) return;
-
-        const consignment = consignments[0];
-        const selectedMethod = consignment.selectedShippingOption;
-        if (!selectedMethod) return;
-
-        const methodId = selectedMethod.id.toLowerCase();
-        const shippingAddress = consignment.shippingAddress;
-
-        if (methodId.includes("pickup") && shippingAddress?.stateOrProvinceCode === "NC") {
-          console.log("In-store pickup selected for NC. Overriding shipping address…");
-
-          const service = window.Checkout;
-
-          await service.executeCheckoutAction((checkoutService) => {
-            return checkoutService.updateShippingAddress(storeAddress);
-          });
-
-          console.log("Shipping address overwritten with store address");
-        }
-      } catch (err) {
-        console.error("Pickup script error", err);
+  function waitForCheckoutSdk(callback) {
+    const interval = setInterval(() => {
+      if (window.checkout && window.checkout.customer) {
+        clearInterval(interval);
+        callback();
       }
-    }
+    }, 250);
   }
-});
+
+  function overrideShippingAddressIfNeeded() {
+    const shippingOptionSelector = 'input[name="shipping-option"]';
+
+    document.querySelectorAll(shippingOptionSelector).forEach((input) => {
+      input.addEventListener('change', () => {
+        const selectedOptionLabel = input.closest('label');
+        const isPickup = selectedOptionLabel && selectedOptionLabel.textContent.toLowerCase().includes('pickup');
+
+        if (isPickup) {
+          const shippingAddress = window.checkout?.shippingAddress;
+
+          // Only proceed if customer is from NC
+          if (shippingAddress?.stateOrProvinceCode === 'NC') {
+            window.checkout.shippingAddress = {
+              ...shippingAddress,
+              ...STORE_ADDRESS,
+            };
+
+            // Autofill visible form fields for user feedback
+            const fields = {
+              'addressLine1Input': STORE_ADDRESS.address1,
+              'cityInput': STORE_ADDRESS.city,
+              'postCodeInput': STORE_ADDRESS.postalCode,
+              'provinceInput': STORE_ADDRESS.stateOrProvince,
+            };
+
+            for (const [fieldId, value] of Object.entries(fields)) {
+              const el = document.getElementById(fieldId);
+              if (el) el.value = value;
+            }
+          }
+        }
+      });
+    });
+  }
+
+  waitForCheckoutSdk(() => {
+    const stepWatcher = new MutationObserver(() => {
+      overrideShippingAddressIfNeeded();
+    });
+
+    stepWatcher.observe(document.body, { childList: true, subtree: true });
+    overrideShippingAddressIfNeeded();
+  });
+})();
