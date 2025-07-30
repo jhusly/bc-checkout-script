@@ -1,63 +1,65 @@
-(function () {
-  const STORE_ADDRESS = {
-    firstName: 'MidAtlantic',
-    lastName: 'Distribution',
-    address1: '2316 Reichard St',
-    city: 'Durham',
-    stateOrProvinceCode: 'NC',
-    postalCode: '27705',
-    countryCode: 'US'
-  };
-
-  const PICKUP_LABEL = 'Pickup In Store';
-
-  function shippingOptionSelectedIsPickup() {
-    const selectedOption = document.querySelector('.form-check-input[aria-checked="true"]')?.closest('.shippingOption');
-    return selectedOption && selectedOption.textContent.includes(PICKUP_LABEL);
-  }
-
-  function setField(name, value) {
-    const input = document.querySelector(`[name="shippingAddress.${name}"]`);
-    if (input) input.value = value;
-  }
-
-  function setSelectField(name, value) {
-    const select = document.querySelector(`select[name="shippingAddress.${name}"]`);
-    if (select) {
-      select.value = value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+window.addEventListener("load", function () {
+  // Wait for Checkout to initialize
+  const interval = setInterval(() => {
+    if (window.checkoutConfig && window.Checkout && window.Checkout.$container) {
+      clearInterval(interval);
+      initPickupHandler();
     }
-  }
+  }, 500);
 
-  function overwriteShippingAddressIfNeeded() {
-    if (shippingOptionSelectedIsPickup()) {
-      setField('firstName', STORE_ADDRESS.firstName);
-      setField('lastName', STORE_ADDRESS.lastName);
-      setField('address1', STORE_ADDRESS.address1);
-      setField('city', STORE_ADDRESS.city);
-      setField('postalCode', STORE_ADDRESS.postalCode);
-      setSelectField('stateOrProvinceCode', STORE_ADDRESS.stateOrProvinceCode);
-      setSelectField('countryCode', STORE_ADDRESS.countryCode);
-      console.log('[StorePickup Script] Store address applied.');
-    } else {
-      console.log('[StorePickup Script] Not using pickup, address untouched.');
-    }
-  }
+  function initPickupHandler() {
+    console.log("In-store pickup script initialized");
 
-  function waitForCheckoutForm() {
-    const formCheck = setInterval(() => {
-      const form = document.querySelector('form[name="checkout_shipping_address"]');
-      if (form) {
-        clearInterval(formCheck);
-        overwriteShippingAddressIfNeeded();
+    // Store address (overwrite to this when needed)
+    const storeAddress = {
+      firstName: 'Pickup',
+      lastName: 'Customer',
+      address1: '123 Store St.',
+      address2: '',
+      city: 'Durham',
+      stateOrProvinceCode: 'NC',
+      postalCode: '27701',
+      countryCode: 'US',
+      phone: '919-000-0000',
+      customFields: [],
+    };
 
-        // Listen for manual change to shipping option
-        form.addEventListener('click', () => {
-          setTimeout(overwriteShippingAddressIfNeeded, 500);
-        });
+    // Listen for shipping method updates
+    const checkoutEl = document.querySelector("#checkout-app");
+
+    const observer = new MutationObserver(() => {
+      checkPickupAndReplaceAddress();
+    });
+
+    observer.observe(checkoutEl, { childList: true, subtree: true });
+
+    async function checkPickupAndReplaceAddress() {
+      try {
+        const state = window.Checkout.getState();
+        const shippingOption = state.shippingOptions?.[0];
+        const consignments = state.consignments || [];
+
+        if (!consignments.length) return;
+
+        const consignment = consignments[0];
+        const selectedMethod = consignment.selectedShippingOption;
+
+        if (!selectedMethod) return;
+
+        const methodId = selectedMethod.id.toLowerCase();
+
+        // Trigger logic ONLY if selected method is in-store pickup
+        if (methodId.includes("pickup") && consignment.shippingAddress?.stateOrProvinceCode === "NC") {
+          console.log("In-store pickup selected for NC. Overriding shipping address...");
+
+          const checkoutService = window.Checkout;
+
+          await checkoutService.updateShippingAddress(storeAddress);
+          console.log("Shipping address overwritten with store address");
+        }
+      } catch (err) {
+        console.error("Pickup script error", err);
       }
-    }, 300);
+    }
   }
-
-  document.addEventListener('DOMContentLoaded', waitForCheckoutForm);
-})();
+});
